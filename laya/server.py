@@ -48,6 +48,7 @@ import asyncio
 import logging
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
@@ -96,6 +97,10 @@ class _Settings:
 
 
 settings = _Settings()
+
+# One bounded executor; LAYA_WORKERS bounds inference concurrency so a burst
+# of decide calls cannot starve the host with Python's unlimited default pool.
+_EXECUTOR = ThreadPoolExecutor(max_workers=settings.workers)
 
 # ---------------------------------------------------------------------------
 # Global agent holder
@@ -340,7 +345,7 @@ def _register_routes(app: FastAPI) -> None:
         loop = asyncio.get_running_loop()
         try:
             raw = await loop.run_in_executor(
-                None,
+                _EXECUTOR,
                 lambda: agent.system_one(request.state, raw_questions),
             )
         except ValueError as exc:
@@ -383,7 +388,7 @@ def _register_routes(app: FastAPI) -> None:
 
         async def _infer_one(state) -> Dict[str, Any]:
             return await loop.run_in_executor(
-                None,
+                _EXECUTOR,
                 lambda: agent.system_one(state, raw_questions),
             )
 
@@ -464,7 +469,7 @@ def _register_routes(app: FastAPI) -> None:
         loop = asyncio.get_running_loop()
         try:
             raw = await loop.run_in_executor(
-                None,
+                _EXECUTOR,
                 lambda: agent.system_one(request.state, raw_questions),
             )
         except ValueError as exc:
